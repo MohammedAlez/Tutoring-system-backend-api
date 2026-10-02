@@ -1,0 +1,371 @@
+// This is your Prisma schema file.
+// Learn more about Prisma schemas:
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum StudentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum GroupStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum GroupType {
+  GROUP
+  INDIVIDUAL
+}
+
+enum DayOfWeek {
+  SUNDAY
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+}
+
+enum SessionStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CCP
+  OTHER
+}
+
+
+// ============================================================
+// USER / TUTOR
+// ============================================================
+
+model User {
+  id           String     @id @default(cuid())
+
+  email        String     @unique
+  passwordHash String
+
+  firstName    String
+  lastName     String
+  phone        String?
+
+  status       UserStatus @default(ACTIVE)
+
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Relations
+  students      Student[]
+  groups        Group[]
+  schedules     Schedule[]
+  sessions      Session[]
+  payments      Payment[]
+
+  refreshTokens RefreshToken[]
+
+  @@index([status])
+}
+
+
+// ============================================================
+// STUDENT
+// ============================================================
+
+model Student {
+  id             String        @id @default(cuid())
+  tutorId        String
+
+  firstName      String
+  lastName       String
+  phone          String?
+
+  parentName     String?
+  parentPhone    String?
+
+  level          String?
+  school         String?
+  subject        String?
+
+  enrollmentDate DateTime      @default(now())
+  status         StudentStatus @default(ACTIVE)
+
+  notes          String?
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  // Relations
+  tutor          User          @relation(fields: [tutorId], references: [id])
+
+  groupStudents  GroupStudent[]
+  attendance     Attendance[]
+  payments       Payment[]
+
+  @@index([tutorId])
+  @@index([status])
+  @@index([lastName, firstName])
+}
+
+
+// ============================================================
+// GROUP
+// ============================================================
+
+model Group {
+  id        String      @id @default(cuid())
+  tutorId   String
+
+  name      String
+
+  type      GroupType   @default(GROUP)
+
+  subject   String?
+  level     String?
+
+  room      String?
+  isOnline  Boolean     @default(false)
+
+  status    GroupStatus @default(ACTIVE)
+
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  // Relations
+  tutor     User        @relation(fields: [tutorId], references: [id])
+
+  students  GroupStudent[]
+  schedules Schedule[]
+  sessions  Session[]
+
+  @@index([tutorId])
+  @@index([status])
+}
+
+
+// ============================================================
+// GROUP ↔ STUDENT
+// ============================================================
+
+model GroupStudent {
+  id        String   @id @default(cuid())
+
+  groupId   String
+  studentId String
+
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, studentId])
+  @@index([studentId])
+  @@index([groupId])
+}
+
+
+// ============================================================
+// RECURRING SCHEDULE
+// ============================================================
+
+model Schedule {
+  id        String    @id @default(cuid())
+
+  tutorId   String
+  groupId   String
+
+  dayOfWeek DayOfWeek
+
+  // Stored as "HH:mm"
+  // Example: "17:00"
+  startTime String
+  endTime   String
+
+  room      String?
+  isOnline  Boolean   @default(false)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  // Relations
+  tutor     User      @relation(fields: [tutorId], references: [id])
+  group     Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([tutorId])
+  @@index([groupId])
+  @@index([dayOfWeek])
+}
+
+
+// ============================================================
+// ACTUAL SESSION
+// ============================================================
+
+model Session {
+  id                 String        @id @default(cuid())
+
+  tutorId            String
+  groupId            String
+
+  scheduledStart     DateTime
+  scheduledEnd       DateTime
+
+  actualStart        DateTime?
+  actualEnd          DateTime?
+
+  status             SessionStatus @default(SCHEDULED)
+
+  room               String?
+  isOnline           Boolean       @default(false)
+
+  cancellationReason String?
+
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  // Relations
+  tutor              User          @relation(fields: [tutorId], references: [id])
+  group              Group         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  attendance         Attendance[]
+
+  @@index([tutorId, scheduledStart])
+  @@index([groupId, scheduledStart])
+  @@index([status])
+}
+
+
+// ============================================================
+// ATTENDANCE
+// ============================================================
+
+model Attendance {
+  id        String           @id @default(cuid())
+
+  sessionId String
+  studentId String
+
+  status    AttendanceStatus
+  note      String?
+
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  // Relations
+  session   Session          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  // A student can only have one attendance record
+  // for a specific session.
+  @@unique([sessionId, studentId])
+
+  @@index([studentId])
+  @@index([sessionId])
+  @@index([status])
+}
+
+
+// ============================================================
+// PAYMENT
+// ============================================================
+
+model Payment {
+  id            String        @id @default(cuid())
+
+  tutorId       String
+  studentId     String
+
+  amount        Decimal       @db.Decimal(10, 2)
+
+  status        PaymentStatus @default(PENDING)
+
+  dueDate       DateTime?
+  paidAt        DateTime?
+
+  paymentMethod PaymentMethod?
+
+  // Optional period that this payment represents.
+  // Example:
+  // periodStart = 2026-10-01
+  // periodEnd   = 2026-10-31
+  periodStart   DateTime?
+  periodEnd     DateTime?
+
+  note          String?
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  tutor         User          @relation(fields: [tutorId], references: [id])
+  student       Student       @relation(fields: [studentId], references: [id])
+
+  @@index([tutorId])
+  @@index([studentId])
+  @@index([status])
+  @@index([paidAt])
+  @@index([periodStart, periodEnd])
+}
+
+
+// ============================================================
+// REFRESH TOKENS
+// ============================================================
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+
+  tokenHash String   @unique
+
+  userId    String
+
+  expiresAt DateTime
+  revokedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
