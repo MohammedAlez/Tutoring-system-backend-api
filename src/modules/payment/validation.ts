@@ -12,3 +12,15 @@ export const getPaymentsSchema = z.object({
     .optional()
     .default(10),
 });
+
+export const paymentIdParamSchema = z.object({
+  id: z.string(),
+});
+
+export const updatePaymentStatusSchema = z.object({
+  status: z.enum(["PAID", "PENDING", "OVERDUE", "CANCELLED"]),
+  paymentMethod: z.enum(["CASH", "BANK_TRANSFER", "CCP", "OTHER"]).optional(),
+  paidAt: z.string().refine((val) => !isNaN(Date.parse(val)), {
+    message: "Invalid ISO date format",
+  }).optional(),
+});

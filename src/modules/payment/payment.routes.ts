@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authenticate } from "../../middleware/authenticate";
-import { getPaymentsController } from "./payment.controller";
+import { getPaymentsController, updatePaymentController } from "./payment.controller";
  // Adjust import paths based on your folder structure
 
 export const paymentRouter = Router();
@@ -9,4 +9,4 @@ export const paymentRouter = Router();
 paymentRouter.use(authenticate);
 
 paymentRouter.get("/", getPaymentsController);
-
+paymentRouter.patch("/:id", updatePaymentController);

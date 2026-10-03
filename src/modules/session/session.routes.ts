@@ -8,6 +8,6 @@ export const sessionRouter = Router();
 // Apply authentication middleware to all routes in this router
 sessionRouter.use(authenticate);
 
-sessionRouter.get("/sessions", getSessionsController);
+sessionRouter.get("/", getSessionsController);
 
 
