@@ -2,17 +2,23 @@ import type { Response } from "express";
 import type { AuthenticatedRequest } from "../../utils/extendedRequests";
 import { asyncHandler } from "../../middleware/asyncHandler";
 import {
+    addGroupSchedule,
   createGroup,
+  deleteGroupSchedule,
   enrollStudentInGroup,
+  getGroupAttendanceStats,
+  getGroupDetails,
   getGroupsList,
   unenrollStudentFromGroup,
   updateGroup,
 } from "./group.service";
 import {
+    addScheduleSchema,
   createGroupSchema,
   enrollStudentSchema,
   getGroupsSchema,
   groupIdParamSchema,
+  scheduleIdParamSchema,
   unenrollStudentParamsSchema,
   updateGroupSchema,
 } from "./validations";
@@ -78,6 +84,67 @@ export const unenrollStudentController = asyncHandler(
     try {
       await unenrollStudentFromGroup(tutorId, groupId, studentId);
       return res.status(200).json({ success: true, message: "Student successfully removed from group." });
+    } catch (error) {
+      return res.status(404).json({ success: false, message: (error as Error).message });
+    }
+  }
+);
+
+export const getGroupDetailsController = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const tutorId = req.user!.userId;
+    const { groupId } = groupIdParamSchema.parse(req.params);
+
+    const group = await getGroupDetails(tutorId, groupId);
+
+    if (!group) {
+      return res.status(404).json({ success: false, message: "Group not found" });
+    }
+
+    return res.status(200).json({ success: true, data: group });
+  }
+);
+
+export const addGroupScheduleController = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const tutorId = req.user!.userId;
+    const { groupId } = groupIdParamSchema.parse(req.params);
+    const body = addScheduleSchema.parse(req.body);
+
+    try {
+      const schedule = await addGroupSchedule(tutorId, groupId, body);
+      return res.status(201).json({ success: true, data: schedule });
+    } catch (error) {
+      return res.status(404).json({ success: false, message: (error as Error).message });
+    }
+  }
+);
+
+export const deleteGroupScheduleController = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const tutorId = req.user!.userId;
+    const { groupId, scheduleId } = scheduleIdParamSchema.parse(req.params);
+
+    try {
+      await deleteGroupSchedule(tutorId, groupId, scheduleId);
+      return res.status(200).json({
+        success: true,
+        message: "Schedule rule deleted successfully.",
+      });
+    } catch (error) {
+      return res.status(404).json({ success: false, message: (error as Error).message });
+    }
+  }
+);
+
+export const getGroupAttendanceStatsController = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const tutorId = req.user!.userId;
+    const { groupId } = groupIdParamSchema.parse(req.params);
+
+    try {
+      const stats = await getGroupAttendanceStats(tutorId, groupId);
+      return res.status(200).json({ success: true, data: stats });
     } catch (error) {
       return res.status(404).json({ success: false, message: (error as Error).message });
     }

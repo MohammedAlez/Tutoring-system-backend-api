@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authenticate } from "../../middleware/authenticate";
-import { getSessionsController } from "./session.controller";
+import { bulkAttendanceController, getSessionByIdController, getSessionsController, updateSessionController } from "./session.controller";
  // Adjust import paths based on your folder structure
 
 export const sessionRouter = Router();
@@ -9,5 +9,7 @@ export const sessionRouter = Router();
 sessionRouter.use(authenticate);
 
 sessionRouter.get("/", getSessionsController);
-
+sessionRouter.get("/:sessionId", getSessionByIdController);
+sessionRouter.patch("/:sessionId", updateSessionController);
+sessionRouter.post("/:sessionId/attendance", bulkAttendanceController);
 

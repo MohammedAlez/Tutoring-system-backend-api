@@ -31,3 +31,24 @@ export const unenrollStudentParamsSchema = z.object({
   groupId: z.string(),
   studentId: z.string(),
 });
+
+export const addScheduleSchema = z.object({
+  dayOfWeek: z.enum([
+    "SUNDAY",
+    "MONDAY",
+    "TUESDAY",
+    "WEDNESDAY",
+    "THURSDAY",
+    "FRIDAY",
+    "SATURDAY",
+  ]),
+  startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format (HH:mm)"),
+  endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Invalid time format (HH:mm)"),
+  room: z.string().optional().nullable(),
+  isOnline: z.boolean().optional().default(false),
+});
+
+export const scheduleIdParamSchema = z.object({
+  groupId: z.string(),
+  scheduleId: z.string(),
+});

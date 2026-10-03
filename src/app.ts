@@ -7,6 +7,7 @@ import { paymentRouter } from "./modules/payment/payment.routes";
 import { dashboardStatsRouter } from "./modules/dashboard-stats/dashboard-stats.routes";
 import { studentRouter } from "./modules/student/student.routes";
 import { groupRouter } from "./modules/group/group.routes";
+import { scheduleRouter } from "./modules/schedule/schedule.routes";
 
 
 
@@ -21,6 +22,7 @@ app.use("/api/sessions", sessionRouter);
 app.use("/api/payments", paymentRouter);
 app.use("/api/students", studentRouter);
 app.use("/api/groups", groupRouter);
+app.use("/api/schedules", scheduleRouter);
 app.use("/api/dashboard-stats", dashboardStatsRouter);
 
 
