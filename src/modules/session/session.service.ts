@@ -1,4 +1,4 @@
-import { AttendanceStatus, Prisma, SessionStatus } from "../../../generated/prisma";
+import { AttendanceStatus, DayOfWeek, Prisma, SessionStatus } from "../../../generated/prisma";
 import { prisma } from "../../lib/prisma";
 
 export const getSessionsByDate = async (tutorId: string, dateString: string) => {
@@ -33,57 +33,57 @@ export const getSessionsByDate = async (tutorId: string, dateString: string) => 
   return sessions;
 };
 
-export const getSessions = async (
-  tutorId: string,
-  filters: { startDate: string; endDate: string; groupId?: string; status?: SessionStatus }
-) => {
-  const start = new Date(filters.startDate);
-  const end = new Date(filters.endDate);
-  // Ensure full day coverage if date string (YYYY-MM-DD) is passed
-  if (filters.endDate.length === 10) {
-    end.setHours(23, 59, 59, 999);
-  }
+// export const getSessions = async (
+//   tutorId: string,
+//   filters: { startDate: string; endDate: string; groupId?: string; status?: SessionStatus }
+// ) => {
+//   const start = new Date(filters.startDate);
+//   const end = new Date(filters.endDate);
+//   // Ensure full day coverage if date string (YYYY-MM-DD) is passed
+//   if (filters.endDate.length === 10) {
+//     end.setHours(23, 59, 59, 999);
+//   }
 
-  const where: Prisma.SessionWhereInput = {
-    tutorId,
-    scheduledStart: {
-      gte: start,
-      lte: end,
-    },
-  };
+//   const where: Prisma.SessionWhereInput = {
+//     tutorId,
+//     scheduledStart: {
+//       gte: start,
+//       lte: end,
+//     },
+//   };
 
-  if (filters.groupId) where.groupId = filters.groupId;
-  if (filters.status) where.status = filters.status;
+//   if (filters.groupId) where.groupId = filters.groupId;
+//   if (filters.status) where.status = filters.status;
 
-  return prisma.session.findMany({
-    where,
-    select: {
-      id: true,
-      groupId: true,
-      scheduledStart: true,
-      scheduledEnd: true,
-      actualStart: true,
-      actualEnd: true,
-      status: true,
-      room: true,
-      isOnline: true,
-      cancellationReason: true,
-      group: {
-        select: {
-          id: true,
-          name: true,
-          type: true,
-          subject: true,
-          level: true,
-        },
-      },
-      _count: {
-        select: { attendance: true },
-      },
-    },
-    orderBy: { scheduledStart: "asc" },
-  });
-};
+//   return prisma.session.findMany({
+//     where,
+//     select: {
+//       id: true,
+//       groupId: true,
+//       scheduledStart: true,
+//       scheduledEnd: true,
+//       actualStart: true,
+//       actualEnd: true,
+//       status: true,
+//       room: true,
+//       isOnline: true,
+//       cancellationReason: true,
+//       group: {
+//         select: {
+//           id: true,
+//           name: true,
+//           type: true,
+//           subject: true,
+//           level: true,
+//         },
+//       },
+//       _count: {
+//         select: { attendance: true },
+//       },
+//     },
+//     orderBy: { scheduledStart: "asc" },
+//   });
+// };
 
 export const getSessionById = async (tutorId: string, sessionId: string) => {
   const session = await prisma.session.findFirst({
@@ -219,4 +219,165 @@ export const saveBulkAttendance = async (
   await prisma.$transaction(operations);
 
   return getSessionById(tutorId, sessionId);
+};
+
+// ===================================================
+// new get session using just in time creation for sessions
+// ===================================================
+
+// Map JavaScript Date.getDay() (0 = Sunday, 1 = Monday, ...) to Prisma DayOfWeek Enum
+const DAY_MAP: Record<number, DayOfWeek> = {
+  0: "SUNDAY",
+  1: "MONDAY",
+  2: "TUESDAY",
+  3: "WEDNESDAY",
+  4: "THURSDAY",
+  5: "FRIDAY",
+  6: "SATURDAY",
+};
+
+/**
+ * Helper to construct a Date object combining a YYYY-MM-DD date with an "HH:mm" time string.
+ */
+const buildDateTime = (baseDate: Date, timeStr: string): Date => {
+  const [hours, minutes] = timeStr.split(":").map(Number);
+  const result = new Date(baseDate);
+  result.setHours(hours, minutes, 0, 0);
+  return result;
+};
+
+export const getSessions = async (
+  tutorId: string,
+  filters: { startDate: string; endDate: string; groupId?: string; status?: SessionStatus }
+) => {
+  const start = new Date(filters.startDate);
+  const end = new Date(filters.endDate);
+
+  // Normalize end date to cover the entire final day (23:59:59.999)
+  if (filters.endDate.length === 10) {
+    end.setHours(23, 59, 59, 999);
+  }
+
+  // 1. Fetch active weekly schedule rules for this tutor (filtered by groupId if provided)
+  const scheduleWhere: Prisma.ScheduleWhereInput = { tutorId };
+  if (filters.groupId) scheduleWhere.groupId = filters.groupId;
+
+  const schedules = await prisma.schedule.findMany({
+    where: scheduleWhere,
+    select: {
+      groupId: true,
+      dayOfWeek: true,
+      startTime: true,
+      endTime: true,
+      room: true,
+      isOnline: true,
+    },
+  });
+
+  // 2. Fetch existing session records in the date range to avoid duplicates
+  const existingWhere: Prisma.SessionWhereInput = {
+    tutorId,
+    scheduledStart: { gte: start, lte: end },
+  };
+  if (filters.groupId) existingWhere.groupId = filters.groupId;
+
+  const existingSessions = await prisma.session.findMany({
+    where: existingWhere,
+    select: {
+      groupId: true,
+      scheduledStart: true,
+    },
+  });
+
+  // Create a fast lookup Set for existing session timestamps: "groupId_timestamp"
+  const existingSessionKeys = new Set(
+    existingSessions.map(
+      (s) => `${s.groupId}_${new Date(s.scheduledStart).getTime()}`
+    )
+  );
+
+  // 3. Calculate missing sessions between start and end dates based on recurring schedules
+  const sessionsToCreate: Prisma.SessionCreateManyInput[] = [];
+  const currentDate = new Date(start);
+
+  // Iterate day by day through the requested date range
+  while (currentDate <= end) {
+    const dayOfWeekEnum = DAY_MAP[currentDate.getDay()];
+    const matchingSchedules = schedules.filter((s) => s.dayOfWeek === dayOfWeekEnum);
+
+    for (const schedule of matchingSchedules) {
+      const scheduledStart = buildDateTime(currentDate, schedule.startTime);
+      const scheduledEnd = buildDateTime(currentDate, schedule.endTime);
+
+      // Verify slot falls strictly within the requested filter range
+      if (scheduledStart >= start && scheduledStart <= end) {
+        const key = `${schedule.groupId}_${scheduledStart.getTime()}`;
+
+        // If no concrete session exists yet for this group + time, queue it for insertion
+        if (!existingSessionKeys.has(key)) {
+          sessionsToCreate.push({
+            tutorId,
+            groupId: schedule.groupId,
+            scheduledStart,
+            scheduledEnd,
+            status: "SCHEDULED",
+            room: schedule.room,
+            isOnline: schedule.isOnline,
+          });
+
+          // Prevent duplicate queues within the same iteration loop
+          existingSessionKeys.add(key);
+        }
+      }
+    }
+
+    // Advance to next day
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  // 4. Perform bulk creation for missing slots if any were detected
+  if (sessionsToCreate.length > 0) {
+    await prisma.session.createMany({
+      data: sessionsToCreate,
+      skipDuplicates: true,
+    });
+  }
+
+  // 5. Query and return all complete session records from DB with proper selections
+  const where: Prisma.SessionWhereInput = {
+    tutorId,
+    scheduledStart: { gte: start, lte: end },
+  };
+
+  if (filters.groupId) where.groupId = filters.groupId;
+  if (filters.status) where.status = filters.status;
+
+  return prisma.session.findMany({
+    where,
+    select: {
+      id: true,
+      groupId: true,
+      scheduledStart: true,
+      scheduledEnd: true,
+      actualStart: true,
+      actualEnd: true,
+      status: true,
+      room: true,
+      isOnline: true,
+      cancellationReason: true,
+      group: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          subject: true,
+          level: true,
+        },
+      },
+      _count: {
+        select: { attendance: true },
+      },
+    },
+    orderBy: { scheduledStart: "asc" },
+  });
 };
