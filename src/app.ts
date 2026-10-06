@@ -8,6 +8,7 @@ import { dashboardStatsRouter } from "./modules/dashboard-stats/dashboard-stats.
 import { studentRouter } from "./modules/student/student.routes";
 import { groupRouter } from "./modules/group/group.routes";
 import { scheduleRouter } from "./modules/schedule/schedule.routes";
+import { profileRouter } from "./modules/user/user.routes";
 
 
 
@@ -24,6 +25,7 @@ app.use("/api/students", studentRouter);
 app.use("/api/groups", groupRouter);
 app.use("/api/schedules", scheduleRouter);
 app.use("/api/dashboard-stats", dashboardStatsRouter);
+app.use("/api/user/profile", profileRouter);
 
 
 
