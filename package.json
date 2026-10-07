@@ -12,7 +12,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon --exec tsx src/app.ts",
     "postinstall": "prisma generate",
-    "start": "tsx src/app.ts"
+    "migrate:deploy": "prisma migrate deploy",
+    "start": "prisma migrate deploy && tsx src/app.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
