@@ -134,35 +134,35 @@ export const updateGroup = async (
   });
 };
 
-export const enrollStudentInGroup = async (
-  tutorId: string,
-  groupId: string,
-  studentId: string
-) => {
-  const group = await prisma.group.findFirst({ where: { id: groupId, tutorId } });
-  const student = await prisma.student.findFirst({ where: { id: studentId, tutorId } });
+// export const enrollStudentInGroup = async (
+//   tutorId: string,
+//   groupId: string,
+//   studentId: string
+// ) => {
+//   const group = await prisma.group.findFirst({ where: { id: groupId, tutorId } });
+//   const student = await prisma.student.findFirst({ where: { id: studentId, tutorId } });
 
-  if (!group || !student) throw new Error("Group or Student not found");
+//   if (!group || !student) throw new Error("Group or Student not found");
 
-  return prisma.groupStudent.create({
-    data: { groupId, studentId },
-  });
-};
+//   return prisma.groupStudent.create({
+//     data: { groupId, studentId },
+//   });
+// };
 
-export const unenrollStudentFromGroup = async (
-  tutorId: string,
-  groupId: string,
-  studentId: string
-) => {
-  const group = await prisma.group.findFirst({ where: { id: groupId, tutorId } });
-  if (!group) throw new Error("Group not found");
+// export const unenrollStudentFromGroup = async (
+//   tutorId: string,
+//   groupId: string,
+//   studentId: string
+// ) => {
+//   const group = await prisma.group.findFirst({ where: { id: groupId, tutorId } });
+//   if (!group) throw new Error("Group not found");
 
-  await prisma.groupStudent.delete({
-    where: {
-      groupId_studentId: { groupId, studentId },
-    },
-  });
-};
+//   await prisma.groupStudent.delete({
+//     where: {
+//       groupId_studentId: { groupId, studentId },
+//     },
+//   });
+// };
 
 export const getGroupDetails = async (tutorId: string, groupId: string) => {
   const group = await prisma.group.findFirst({

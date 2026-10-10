@@ -10,8 +10,8 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
-  // directUrl = env("DIRECT_URL")
 
 // ============================================================
 // ENUMS
@@ -74,104 +74,115 @@ enum PaymentMethod {
   OTHER
 }
 
+enum BillingInterval {
+  MONTHLY
+}
+
+enum InvoiceStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  CANCELLED
+}
 
 // ============================================================
 // USER / TUTOR
 // ============================================================
 
 model User {
-  id           String     @id @default(cuid())
+  id String @id @default(cuid())
 
-  email        String     @unique
+  email        String @unique
   passwordHash String
 
-  firstName    String
-  lastName     String
-  phone        String?
+  firstName String
+  lastName  String
+  phone     String?
 
-  status       UserStatus @default(ACTIVE)
+  status UserStatus @default(ACTIVE)
 
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  students      Student[]
-  groups        Group[]
-  schedules     Schedule[]
-  sessions      Session[]
-  payments      Payment[]
+  students  Student[]
+  groups    Group[]
+  schedules Schedule[]
+  sessions  Session[]
+  payments  Payment[]
 
   refreshTokens RefreshToken[]
+  invoices      Invoice[]
 
   @@index([status])
 }
-
 
 // ============================================================
 // STUDENT
 // ============================================================
 
 model Student {
-  id             String        @id @default(cuid())
-  tutorId        String
+  id      String @id @default(cuid())
+  tutorId String
 
-  firstName      String
-  lastName       String
-  phone          String?
+  firstName String
+  lastName  String
+  phone     String?
 
-  parentName     String?
-  parentPhone    String?
+  parentName  String?
+  parentPhone String?
 
-  level          String?
-  school         String?
-  subject        String?
+  level   String?
+  school  String?
+  subject String?
 
   enrollmentDate DateTime      @default(now())
   status         StudentStatus @default(ACTIVE)
 
-  notes          String?
+  notes String?
 
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  tutor          User          @relation(fields: [tutorId], references: [id])
+  tutor User @relation(fields: [tutorId], references: [id])
 
-  groupStudents  GroupStudent[]
-  attendance     Attendance[]
-  payments       Payment[]
+  groupStudents GroupStudent[]
+  attendance    Attendance[]
+  payments      Payment[]
+  invoices      Invoice[]
 
   @@index([tutorId])
   @@index([status])
   @@index([lastName, firstName])
 }
 
-
 // ============================================================
 // GROUP
 // ============================================================
 
 model Group {
-  id        String      @id @default(cuid())
-  tutorId   String
+  id      String @id @default(cuid())
+  tutorId String
 
-  name      String
+  name String
 
-  type      GroupType   @default(GROUP)
+  type GroupType @default(GROUP)
 
-  subject   String?
-  level     String?
+  subject String?
+  level   String?
 
-  room      String?
-  isOnline  Boolean     @default(false)
+  room     String?
+  isOnline Boolean @default(false)
 
-  status    GroupStatus @default(ACTIVE)
+  status GroupStatus @default(ACTIVE)
 
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  tutor     User        @relation(fields: [tutorId], references: [id])
+  tutor User @relation(fields: [tutorId], references: [id])
 
   students  GroupStudent[]
   schedules Schedule[]
@@ -181,38 +192,106 @@ model Group {
   @@index([status])
 }
 
-
 // ============================================================
-// GROUP ↔ STUDENT
+// NEW GROUP ↔ STUDENT
 // ============================================================
 
 model GroupStudent {
-  id        String   @id @default(cuid())
-
+  id        String @id @default(cuid())
   groupId   String
   studentId String
 
-  joinedAt  DateTime @default(now())
-  leftAt    DateTime?
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
 
-  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  // Billing configuration
+  billingFee            Decimal  @db.Decimal(10, 2)
+  billingIntervalMonths Int      @default(1)
+  nextBillingDate       DateTime
+  billingEnabled        Boolean  @default(true)
 
-  @@unique([groupId, studentId])
-  @@index([studentId])
+  group   Group   @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  invoices Invoice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([groupId])
+  @@index([studentId])
+  @@index([billingEnabled, nextBillingDate])
 }
 
+model Invoice {
+  id           String @id @default(cuid())
+  tutorId      String
+  studentId    String
+  enrollmentId String
+
+  amount Decimal       @db.Decimal(10, 2)
+  status InvoiceStatus @default(PENDING)
+
+  periodStart DateTime
+  periodEnd   DateTime
+  dueDate     DateTime
+
+  // Preserve the original price even if the fee changes.
+  description String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tutor User @relation(fields: [tutorId], references: [id], onDelete: Restrict)
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  enrollment GroupStudent @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+
+  payments Payment[]
+
+  @@unique([enrollmentId, periodStart])
+  @@index([tutorId, status, dueDate])
+  @@index([studentId, dueDate])
+}
+
+// ============================================================
+// PAYMENT
+// ============================================================
+
+model Payment {
+  id String @id @default(cuid())
+
+  tutorId   String
+  invoiceId String
+
+  amount        Decimal       @db.Decimal(10, 2)
+  paidAt        DateTime      @default(now())
+  paymentMethod PaymentMethod
+  note          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tutor User @relation(fields: [tutorId], references: [id], onDelete: Restrict)
+
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  student   Student? @relation(fields: [studentId], references: [id])
+  studentId String?
+
+  @@index([tutorId, paidAt])
+  @@index([invoiceId])
+}
 
 // ============================================================
 // RECURRING SCHEDULE
 // ============================================================
 
 model Schedule {
-  id        String    @id @default(cuid())
+  id String @id @default(cuid())
 
-  tutorId   String
-  groupId   String
+  tutorId String
+  groupId String
 
   dayOfWeek DayOfWeek
 
@@ -221,150 +300,103 @@ model Schedule {
   startTime String
   endTime   String
 
-  room      String?
-  isOnline  Boolean   @default(false)
+  room     String?
+  isOnline Boolean @default(false)
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  tutor     User      @relation(fields: [tutorId], references: [id])
-  group     Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  tutor User  @relation(fields: [tutorId], references: [id])
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@index([tutorId])
   @@index([groupId])
   @@index([dayOfWeek])
 }
 
-
 // ============================================================
 // ACTUAL SESSION
 // ============================================================
 
 model Session {
-  id                 String        @id @default(cuid())
+  id String @id @default(cuid())
 
-  tutorId            String
-  groupId            String
+  tutorId String
+  groupId String
 
-  scheduledStart     DateTime
-  scheduledEnd       DateTime
+  scheduledStart DateTime
+  scheduledEnd   DateTime
 
-  actualStart        DateTime?
-  actualEnd          DateTime?
+  actualStart DateTime?
+  actualEnd   DateTime?
 
-  status             SessionStatus @default(SCHEDULED)
+  status SessionStatus @default(SCHEDULED)
 
-  room               String?
-  isOnline           Boolean       @default(false)
+  room     String?
+  isOnline Boolean @default(false)
 
   cancellationReason String?
 
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  tutor              User          @relation(fields: [tutorId], references: [id])
-  group              Group         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  tutor User  @relation(fields: [tutorId], references: [id])
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
-  attendance         Attendance[]
+  attendance Attendance[]
 
   @@index([tutorId, scheduledStart])
   @@index([groupId, scheduledStart])
   @@index([status])
 }
 
-
 // ============================================================
 // ATTENDANCE
 // ============================================================
 
 model Attendance {
-  id        String           @id @default(cuid())
+  id String @id @default(cuid())
 
   sessionId String
   studentId String
 
-  status    AttendanceStatus
-  note      String?
+  status AttendanceStatus
+  note   String?
 
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
-  session   Session          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   // A student can only have one attendance record
   // for a specific session.
   @@unique([sessionId, studentId])
-
   @@index([studentId])
   @@index([sessionId])
   @@index([status])
 }
-
-
-// ============================================================
-// PAYMENT
-// ============================================================
-
-model Payment {
-  id            String        @id @default(cuid())
-
-  tutorId       String
-  studentId     String
-
-  amount        Decimal       @db.Decimal(10, 2)
-
-  status        PaymentStatus @default(PENDING)
-
-  dueDate       DateTime?
-  paidAt        DateTime?
-
-  paymentMethod PaymentMethod?
-
-  // Optional period that this payment represents.
-  // Example:
-  // periodStart = 2026-10-01
-  // periodEnd   = 2026-10-31
-  periodStart   DateTime?
-  periodEnd     DateTime?
-
-  note          String?
-
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  // Relations
-  tutor         User          @relation(fields: [tutorId], references: [id])
-  student       Student       @relation(fields: [studentId], references: [id])
-
-  @@index([tutorId])
-  @@index([studentId])
-  @@index([status])
-  @@index([paidAt])
-  @@index([periodStart, periodEnd])
-}
-
 
 // ============================================================
 // REFRESH TOKENS
 // ============================================================
 
 model RefreshToken {
-  id        String   @id @default(cuid())
+  id String @id @default(cuid())
 
-  tokenHash String   @unique
+  tokenHash String @unique
 
-  userId    String
+  userId String
 
   expiresAt DateTime
   revokedAt DateTime?
 
   createdAt DateTime @default(now())
 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])

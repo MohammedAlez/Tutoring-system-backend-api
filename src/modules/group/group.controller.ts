@@ -5,11 +5,10 @@ import {
     addGroupSchedule,
   createGroup,
   deleteGroupSchedule,
-  enrollStudentInGroup,
   getGroupAttendanceStats,
   getGroupDetails,
   getGroupsList,
-  unenrollStudentFromGroup,
+  // unenrollStudentFromGroup,
   updateGroup,
 } from "./group.service";
 import {
@@ -22,6 +21,7 @@ import {
   unenrollStudentParamsSchema,
   updateGroupSchema,
 } from "./validations";
+import { enrollStudentInGroup } from "./enrolments.service";
 
 export const getGroupsController = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
@@ -65,30 +65,34 @@ export const enrollStudentController = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const tutorId = req.user!.userId;
     const { groupId } = groupIdParamSchema.parse(req.params);
-    const { studentId } = enrollStudentSchema.parse(req.body);
+    const input = enrollStudentSchema.parse(req.body);
 
-    try {
-      const enrollment = await enrollStudentInGroup(tutorId, groupId, studentId);
-      return res.status(201).json({ success: true, data: enrollment });
-    } catch (error) {
-      return res.status(404).json({ success: false, message: (error as Error).message });
-    }
-  }
+    const enrollment = await enrollStudentInGroup(
+      tutorId,
+      groupId,
+      input,
+    );
+
+    return res.status(201).json({
+      success: true,
+      data: enrollment,
+    });
+  },
 );
 
-export const unenrollStudentController = asyncHandler(
-  async (req: AuthenticatedRequest, res: Response) => {
-    const tutorId = req.user!.userId;
-    const { groupId, studentId } = unenrollStudentParamsSchema.parse(req.params);
+// export const unenrollStudentController = asyncHandler(
+//   async (req: AuthenticatedRequest, res: Response) => {
+//     const tutorId = req.user!.userId;
+//     const { groupId, studentId } = unenrollStudentParamsSchema.parse(req.params);
 
-    try {
-      await unenrollStudentFromGroup(tutorId, groupId, studentId);
-      return res.status(200).json({ success: true, message: "Student successfully removed from group." });
-    } catch (error) {
-      return res.status(404).json({ success: false, message: (error as Error).message });
-    }
-  }
-);
+//     try {
+//       await unenrollStudentFromGroup(tutorId, groupId, studentId);
+//       return res.status(200).json({ success: true, message: "Student successfully removed from group." });
+//     } catch (error) {
+//       return res.status(404).json({ success: false, message: (error as Error).message });
+//     }
+//   }
+// );
 
 export const getGroupDetailsController = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {

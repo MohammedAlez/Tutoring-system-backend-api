@@ -4,7 +4,7 @@ import {
   createGroupController,
   enrollStudentController,
   getGroupsController,
-  unenrollStudentController,
+  // unenrollStudentController,
   updateGroupController,
   addGroupScheduleController,
   getGroupAttendanceStatsController,
@@ -21,7 +21,7 @@ groupRouter.get("/:groupId", getGroupDetailsController);
 groupRouter.patch("/:groupId", updateGroupController);
 
 groupRouter.post("/:groupId/students", enrollStudentController);
-groupRouter.delete("/:groupId/students/:studentId", unenrollStudentController);
+// groupRouter.delete("/:groupId/students/:studentId", unenrollStudentController);
 
 
 // Group Recurring Schedules
