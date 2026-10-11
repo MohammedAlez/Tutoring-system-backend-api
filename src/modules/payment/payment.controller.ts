@@ -47,9 +47,10 @@ import {
 export const getPaymentsController = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
     const tutorId = req.user!.userId;
-    const filters = getPaymentsQuerySchema.parse(req.query);
 
-    const result = await getPayments(tutorId, filters);
+    const query = getPaymentsQuerySchema.parse(req.query);
+
+    const result = await getPayments(tutorId, query);
 
     return res.status(200).json({
       success: true,

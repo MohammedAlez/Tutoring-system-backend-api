@@ -9,7 +9,8 @@ import {
   addGroupScheduleController,
   getGroupAttendanceStatsController,
   deleteGroupScheduleController,
-  getGroupDetailsController
+  getGroupDetailsController,
+  unenrollStudentController
 } from "./group.controller";
 
 export const groupRouter = Router();
@@ -21,7 +22,7 @@ groupRouter.get("/:groupId", getGroupDetailsController);
 groupRouter.patch("/:groupId", updateGroupController);
 
 groupRouter.post("/:groupId/students", enrollStudentController);
-// groupRouter.delete("/:groupId/students/:studentId", unenrollStudentController);
+groupRouter.delete("/:groupId/students/:studentId", unenrollStudentController);
 
 
 // Group Recurring Schedules

@@ -146,3 +146,152 @@ export const enrollStudentInGroup = async (
     };
   });
 };
+
+
+
+// export const unenrollStudentFromGroup = async (
+
+//   tutorId: string,
+//   groupId: string,
+//   studentId: string,
+// ) => {
+//   return prisma.$transaction(async (tx) => {
+//     const group = await tx.group.findFirst({
+//       where: {
+//         id: groupId,
+//         tutorId,
+//       },
+//       select: { id: true },
+//     });
+
+//     if (!group) {
+//       throw new AppError("Group not found", 404);
+//     }
+
+//     const enrollment = await tx.groupStudent.findFirst({
+//       where: {
+//         groupId,
+//         studentId,
+//         leftAt: null,
+//         group: {
+//           tutorId,
+//         },
+//       },
+//       select: {
+//         id: true,
+//       },
+//     });
+
+//     if (!enrollment) {
+//       throw new AppError(
+//         "Active enrollment not found for this student in this group",
+//         404,
+//       );
+//     }
+
+//     const leftAt = new Date();
+
+//     const updatedEnrollment = await tx.groupStudent.update({
+//       where: {
+//         id: enrollment.id,
+//       },
+//       data: {
+//         leftAt,
+//         billingEnabled: false,
+//       },
+//     });
+
+//     return updatedEnrollment;
+//   });
+// };
+
+
+export const unenrollStudentFromGroup = async (
+  tutorId: string,
+  groupId: string,
+  studentId: string,
+) => {
+  // Use the same default departure date as endEnrollment:
+  // today at midnight UTC.
+  const departureDate = new Date(
+    new Date().toISOString().slice(0, 10),
+  );
+
+  return prisma.$transaction(async (tx) => {
+    // 1. Verify that the group belongs to this tutor.
+    const group = await tx.group.findFirst({
+      where: {
+        id: groupId,
+        tutorId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!group) {
+      throw new AppError("Group not found", 404);
+    }
+
+    // 2. Find the student's active enrollment in this group.
+    const enrollment = await tx.groupStudent.findFirst({
+      where: {
+        groupId,
+        studentId,
+        leftAt: null,
+        group: {
+          tutorId,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!enrollment) {
+      throw new AppError(
+        "Active enrollment not found for this student in this group",
+        404,
+      );
+    }
+
+    // 3. End the enrollment only if it is still active.
+    const result = await tx.groupStudent.updateMany({
+      where: {
+        id: enrollment.id,
+        leftAt: null,
+        group: {
+          tutorId,
+        },
+      },
+      data: {
+        leftAt: departureDate,
+        billingEnabled: false,
+      },
+    });
+
+    // Protect against concurrent requests ending the same enrollment.
+    if (result.count === 0) {
+      throw new AppError("Enrollment has already ended", 409);
+    }
+
+    // 4. Return the updated enrollment, matching endEnrollment.
+    return tx.groupStudent.findUniqueOrThrow({
+      where: {
+        id: enrollment.id,
+      },
+      select: {
+        id: true,
+        groupId: true,
+        studentId: true,
+        joinedAt: true,
+        leftAt: true,
+        billingFee: true,
+        billingIntervalMonths: true,
+        nextBillingDate: true,
+        billingEnabled: true,
+        updatedAt: true,
+      },
+    });
+  });
+};

@@ -38,6 +38,9 @@ export const getStudents = async (
       take: limit,
       include: {
         groupStudents: {
+          where:{
+            leftAt: null,
+          },
           select: {
             group: {
               select: {
@@ -89,57 +92,57 @@ export const createStudentProfile = async (
   return student;
 };
 
-export const getStudentById = async (tutorId: string, studentId: string) => {
-  const student = await prisma.student.findFirst({
-    where: { id: studentId, tutorId }, // Ensures the student belongs to the tutor
-    include: {
-      groupStudents: {
-        include: {
-          group: {
-            select: {
-              id: true,
-              name: true,
-              subject: true,
-              level: true,
-              room: true,
-              isOnline: true,
-              status: true,
-            },
-          },
-        },
-      },
-      attendance: {
-        include: {
-          session: {
-            select: {
-              id: true,
-              scheduledStart: true,
-              scheduledEnd: true,
-              group: {
-                select: { id: true, name: true },
-              },
-            },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-      },
-      payments: {
-        orderBy: { dueDate: "desc" },
-      },
-    },
-  });
+// export const getStudentById = async (tutorId: string, studentId: string) => {
+//   const student = await prisma.student.findFirst({
+//     where: { id: studentId, tutorId }, // Ensures the student belongs to the tutor
+//     include: {
+//       groupStudents: {
+//         include: {
+//           group: {
+//             select: {
+//               id: true,
+//               name: true,
+//               subject: true,
+//               level: true,
+//               room: true,
+//               isOnline: true,
+//               status: true,
+//             },
+//           },
+//         },
+//       },
+//       attendance: {
+//         include: {
+//           session: {
+//             select: {
+//               id: true,
+//               scheduledStart: true,
+//               scheduledEnd: true,
+//               group: {
+//                 select: { id: true, name: true },
+//               },
+//             },
+//           },
+//         },
+//         orderBy: { createdAt: "desc" },
+//       },
+//       payments: {
+//         orderBy: { dueDate: "desc" },
+//       },
+//     },
+//   });
 
-  if (!student) return null;
+//   if (!student) return null;
 
-  // Format payments to convert Prisma Decimal to standard JS numbers for JSON
-  return {
-    ...student,
-    payments: student.payments.map((p) => ({
-      ...p,
-      amount: p.amount.toNumber(),
-    })),
-  };
-};
+//   // Format payments to convert Prisma Decimal to standard JS numbers for JSON
+//   return {
+//     ...student,
+//     payments: student.payments.map((p) => ({
+//       ...p,
+//       amount: p.amount.toNumber(),
+//     })),
+//   };
+// };
 
 export const updateStudentProfile = async (
   tutorId: string,
@@ -155,4 +158,112 @@ export const updateStudentProfile = async (
   if (result.count === 0) return null;
 
   return prisma.student.findUnique({ where: { id: studentId } });
+};
+
+export const getStudentById = async (
+  tutorId: string,
+  studentId: string,
+) => {
+  const student = await prisma.student.findFirst({
+    where: {
+      id: studentId,
+      tutorId,
+    },
+    include: {
+      groupStudents: {
+        where: {
+          leftAt: null,
+        },
+        include: {
+          group: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              subject: true,
+              level: true,
+              room: true,
+              isOnline: true,
+              status: true,
+            },
+          },
+        },
+        orderBy: {
+          joinedAt: "desc",
+        },
+      },
+
+      attendance: {
+        include: {
+          session: {
+            select: {
+              id: true,
+              scheduledStart: true,
+              scheduledEnd: true,
+              group: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      },
+
+      invoices: {
+        orderBy: {
+          createdAt: "desc",
+        },
+        include: {
+          payments: {
+            orderBy: {
+              paidAt: "desc",
+            },
+          },
+          enrollment: {
+            select: {
+              id: true,
+              group: {
+                select: {
+                  id: true,
+                  name: true,
+                  type: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!student) return null;
+
+  return {
+    ...student,
+    invoices: student.invoices.map((invoice) => {
+      const paidAmount = invoice.payments.reduce(
+        (total, payment) => total + payment.amount.toNumber(),
+        0,
+      );
+
+      return {
+        ...invoice,
+        amount: invoice.amount.toNumber(),
+        paidAmount,
+        outstandingBalance: Math.max(
+          0,
+          invoice.amount.toNumber() - paidAmount,
+        ),
+        payments: invoice.payments.map((payment) => ({
+          ...payment,
+          amount: payment.amount.toNumber(),
+        })),
+      };
+    }),
+  };
 };

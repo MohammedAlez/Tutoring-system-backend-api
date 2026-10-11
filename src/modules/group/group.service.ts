@@ -1,4 +1,5 @@
 import { DayOfWeek, GroupType, Prisma,  } from "../../../generated/prisma";
+import { AppError } from "../../errors/app-error";
 import { prisma,  } from "../../lib/prisma";
 
 const formatDayName = (dayEnum: string): string => {
@@ -41,7 +42,11 @@ export const getGroupsList = async (
       status: true,
       createdAt: true,
       _count: {
-        select: { students: true },
+        select: { 
+          students: {
+            where: { leftAt: null },
+          },
+         },
       },
       schedules: {
         select: {
@@ -166,7 +171,7 @@ export const updateGroup = async (
 
 export const getGroupDetails = async (tutorId: string, groupId: string) => {
   const group = await prisma.group.findFirst({
-    where: { id: groupId, tutorId },
+    where: { id: groupId, tutorId, },
     select: {
       id: true,
       name: true,
@@ -189,6 +194,7 @@ export const getGroupDetails = async (tutorId: string, groupId: string) => {
         orderBy: { dayOfWeek: "asc" },
       },
       students: {
+        where: { leftAt: null },
         select: {
           joinedAt: true,
           student: {
@@ -207,7 +213,9 @@ export const getGroupDetails = async (tutorId: string, groupId: string) => {
       _count: {
         select: {
           sessions: true,
-          students: true,
+          students: {
+            where: { leftAt: null },
+          },
         },
       },
     },
@@ -261,53 +269,92 @@ export const deleteGroupSchedule = async (tutorId: string, groupId: string, sche
   await prisma.schedule.delete({ where: { id: scheduleId } });
 };
 
-export const getGroupAttendanceStats = async (tutorId: string, groupId: string) => {
+export const getGroupAttendanceStats = async (
+  tutorId: string,
+  groupId: string,
+) => {
   const group = await prisma.group.findFirst({
-    where: { id: groupId, tutorId },
+    where: {
+      id: groupId,
+      tutorId,
+    },
     include: {
       students: {
+        where: {
+          leftAt: null, // Only active enrollments
+        },
         include: {
           student: {
-            select: { id: true, firstName: true, lastName: true },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+            },
           },
         },
       },
       sessions: {
-        where: { status: "COMPLETED" },
-        select: { id: true },
+        where: {
+          status: "COMPLETED",
+        },
+        select: {
+          id: true,
+        },
       },
     },
   });
 
-  if (!group) throw new Error("Group not found");
+  if (!group) {
+    throw new AppError("Group not found", 404);
+  }
 
   const totalCompletedSessions = group.sessions.length;
-  const sessionIds = group.sessions.map((s) => s.id);
+  const sessionIds = group.sessions.map((session) => session.id);
 
-  const attendanceRecords = await prisma.attendance.findMany({
-    where: {
-      sessionId: { in: sessionIds },
-    },
-    select: {
-      studentId: true,
-      status: true,
-    },
-  });
+  const attendanceRecords =
+    sessionIds.length > 0
+      ? await prisma.attendance.findMany({
+          where: {
+            sessionId: {
+              in: sessionIds,
+            },
+          },
+          select: {
+            studentId: true,
+            status: true,
+          },
+        })
+      : [];
 
-  const studentStats = group.students.map((gs) => {
-    const student = gs.student;
-    const records = attendanceRecords.filter((a) => a.studentId === student.id);
+  const studentStats = group.students.map(({ student }) => {
+    const records = attendanceRecords.filter(
+      (record) => record.studentId === student.id,
+    );
 
-    const presentCount = records.filter((r) => r.status === "PRESENT").length;
-    const lateCount = records.filter((r) => r.status === "LATE").length;
-    const absentCount = records.filter((r) => r.status === "ABSENT").length;
-    const excusedCount = records.filter((r) => r.status === "EXCUSED").length;
+    const presentCount = records.filter(
+      (record) => record.status === "PRESENT",
+    ).length;
+
+    const lateCount = records.filter(
+      (record) => record.status === "LATE",
+    ).length;
+
+    const absentCount = records.filter(
+      (record) => record.status === "ABSENT",
+    ).length;
+
+    const excusedCount = records.filter(
+      (record) => record.status === "EXCUSED",
+    ).length;
 
     // Attended = PRESENT + LATE
     const attendedSessions = presentCount + lateCount;
+
     const attendancePercentage =
       totalCompletedSessions > 0
-        ? Math.round((attendedSessions / totalCompletedSessions) * 100)
+        ? Math.round(
+            (attendedSessions / totalCompletedSessions) * 100,
+          )
         : 0;
 
     return {

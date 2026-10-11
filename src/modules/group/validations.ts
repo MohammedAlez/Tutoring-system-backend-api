@@ -100,3 +100,8 @@ export const scheduleIdParamSchema = z.object({
   groupId: z.string(),
   scheduleId: z.string(),
 });
+
+
+// export const unenrollStudentSchema = z.object({
+//   studentId: z.string().trim().min(1, "Student ID is required"),
+// });

@@ -21,7 +21,7 @@ import {
   unenrollStudentParamsSchema,
   updateGroupSchema,
 } from "./validations";
-import { enrollStudentInGroup } from "./enrolments.service";
+import { enrollStudentInGroup, unenrollStudentFromGroup } from "./enrolments.service";
 
 export const getGroupsController = asyncHandler(
   async (req: AuthenticatedRequest, res: Response) => {
@@ -80,6 +80,27 @@ export const enrollStudentController = asyncHandler(
   },
 );
 
+export const unenrollStudentController = asyncHandler(
+  async (req: AuthenticatedRequest, res: Response) => {
+    const tutorId = req.user!.userId;
+    const { groupId } = unenrollStudentParamsSchema.parse(req.params);
+    const { studentId } = unenrollStudentParamsSchema.parse(req.params);
+
+    console.log("tutorId:", tutorId);
+    console.log("groupId:", groupId);
+    console.log("studentId:", studentId);
+    const enrollment = await unenrollStudentFromGroup(
+      tutorId,
+      groupId,
+      studentId,
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: enrollment,
+    });
+  },
+);
 // export const unenrollStudentController = asyncHandler(
 //   async (req: AuthenticatedRequest, res: Response) => {
 //     const tutorId = req.user!.userId;
