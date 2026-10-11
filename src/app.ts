@@ -14,8 +14,8 @@ import { invoiceRouter } from "./modules/invoice/invoice.routes";
 
 
 
-const PORT = 9500
-// const PORT = process.env.PORT || 8500
+// const PORT = 9500
+const PORT = process.env.PORT || 8500
 const app = express()
 
 app.use(express.json());
