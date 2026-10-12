@@ -97,6 +97,7 @@ export const getSessionById = async (tutorId: string, sessionId: string) => {
           subject: true,
           level: true,
           students: {
+            where: { leftAt: null },
             select: {
               student: {
                 select: {

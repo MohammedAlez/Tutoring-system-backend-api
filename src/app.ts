@@ -27,7 +27,7 @@ app.use("/api/payments", paymentRouter);
 app.use("/api/students", studentRouter);
 app.use("/api/groups", groupRouter);
 app.use("/api/schedules", scheduleRouter);
-app.use("/api/dashboard-stats", dashboardStatsRouter);
+app.use("/api/dashboard/stats", dashboardStatsRouter);
 app.use("/api/user/profile", profileRouter);
 app.use("/api/enrollments", enrollmentRouter);
 app.use("/api/invoices", invoiceRouter);
