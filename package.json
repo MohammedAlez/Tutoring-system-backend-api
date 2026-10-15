@@ -13,7 +13,8 @@
     "dev": "nodemon --exec tsx src/app.ts",
     "postinstall": "prisma generate",
     "migrate:deploy": "prisma migrate deploy",
-    "start": "prisma migrate deploy && tsx src/app.ts"
+    "start": "prisma migrate deploy && tsx src/app.ts",
+    "billing:generate": "tsx src/jobs/generate-recurring-invoices.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
